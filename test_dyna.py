@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torchvision
 import torchvision.transforms as transforms
+from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
 
 # Extract the options
@@ -20,6 +21,10 @@ trainset = torchvision.datasets.CIFAR100(root='./data', train=False,
                                         download=True, transform=transform)
 dataset = torch.utils.data.DataLoader(trainset, batch_size=1,
                                         shuffle=False, num_workers=0, drop_last=True)
+A = trainset.class_to_idx
+#B= trainset.targets
+print('A: ',A)
+#print(B)
 dataset_size = len(dataset)
 print('#test images = %d' % dataset_size)
 
@@ -63,21 +68,24 @@ for i, data in enumerate(dataset):
     PSNR_list.append(np.mean(PSNR))
 
     PSNR_class_list[data[1].item()].append(PSNR)
+    
+    img_gen_tensor = torch.from_numpy(np.transpose(img_gen_int8, (0, 3, 1, 2))).float()
+    origin_tensor = torch.from_numpy(np.transpose(origin_int8, (0, 3, 1, 2))).float()
+
+    ssim_val = ssim(img_gen_tensor, origin_tensor.repeat(opt.num_test_channel,1,1,1), data_range=255, size_average=False) # return (N,)
+    SSIM_list.append(torch.mean(ssim_val))
 
     if i % 100 == 0:
         print(i)
 
-counts = [np.mean(count_list[i]) for i in range(10)]
-PSNRs = [np.mean(np.hstack(PSNR_class_list[i])) for i in range(10)]
-
+counts = [np.mean(count_list[i]) for i in range(100)]
+PSNRs = [np.mean(np.hstack(PSNR_class_list[i])) for i in range(100)]
 CPP_channel = np.mean(N_channel_list)/16
 CPP_Gtilde = np.mean(N_channel_list)*128/(2*32*32)
 Features = np.mean(N_channel_list)-4
+print('SSIM: '+str(np.mean(SSIM_list)))
 print(f'Mean PSNR: {np.mean(PSNR_list):.3f}')
-print(f'Mean SSIM: {np.mean(SSIM_list):.3f}')
 print(f'Mean Channel: {np.mean(N_channel_list):.3f}')
 print('Mean CPP_channel: ', CPP_channel)
 print('Mean CPP_Gtilde: ', CPP_Gtilde)
 print('Mean selectable features:', Features)
-print(f"Counts: {*counts,}")
-print(f"PSNRs: {*PSNRs,}")
